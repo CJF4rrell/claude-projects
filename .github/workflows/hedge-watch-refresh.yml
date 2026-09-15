@@ -1,0 +1,38 @@
+name: Hedge Watch daily refresh
+
+on:
+  schedule:
+    # 05:00 UTC = 06:00 Europe/Dublin during Irish Summer Time (IST, UTC+1).
+    # Once Ireland switches back to GMT (UTC+0) on the last Sunday in October,
+    # this will fire at 05:00 local instead of 06:00 — change to "0 6 * * *"
+    # for the winter half of the year if you want to hold 6am local exactly.
+    - cron: "0 5 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Fetch latest rates and update dataset
+        run: python hedge-watch/scripts/refresh.py
+
+      - name: Commit and push if changed
+        run: |
+          if git diff --quiet -- hedge-watch/data/fx-data.json; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git config user.name "hedge-watch-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add hedge-watch/data/fx-data.json
+          git commit -m "Hedge Watch: daily rate refresh $(date -u +%Y-%m-%d)"
+          git push
